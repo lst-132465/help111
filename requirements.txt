@@ -1,5 +1,9 @@
-# 智能面试助手 - 锁定兼容版本（2026.5 全量测试通过）
-streamlit==1.57.0
-zhipuai==2.2.0
-python-dotenv==1.0.0
-requests==2.32.2
+# 强制忽略已安装依赖，清理缓存
+--force-reinstall
+--no-cache-dir
+
+# 核心依赖
+streamlit>=1.57.0
+zhipuai>=2.2.0
+python-dotenv>=1.0.0
+requests>=2.31.0
