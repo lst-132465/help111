@@ -1,5 +1,5 @@
-# 智能面试助手 - 核心依赖（Streamlit Cloud 2026.5 验证通过）
-streamlit>=1.57.0
-zhipuai>=2.2.0
-python-dotenv>=1.0.0
-requests>=2.31.0
+# 智能面试助手 - 锁定兼容版本（2026.5 全量测试通过）
+streamlit==1.57.0
+zhipuai==2.2.0
+python-dotenv==1.0.0
+requests==2.32.2
