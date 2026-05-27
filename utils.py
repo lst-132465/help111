@@ -4,8 +4,7 @@ import tempfile
 import shutil
 from PyPDF2 import PdfReader
 from docx import Document
-# 已注释：whisper相关导入
-# import whisper
+import whisper
 import jieba
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -13,23 +12,19 @@ import re
 import streamlit as st
 import time
 
-# 已注释：全局Whisper模型相关代码
 # 全局Whisper模型，懒加载
-# whisper_model = None
+whisper_model = None
 
-# 已注释：Whisper初始化函数
-# def init_whisper():
-#     """初始化Whisper模型，自动配置ffmpeg路径"""
-#     global whisper_model
-#     if whisper_model is None:
-#         # ✅ 修复：正确添加系统路径，使用os.pathsep分隔符
-#         sys.path.append(os.getcwd())
-#         os.environ["PATH"] += os.pathsep + os.getcwd()
-#         
-#         print("正在加载Whisper语音模型（base版，体积小、部署快，满足面试需求）...")
-#         # ✅ 修复：改用base版模型，部署速度提升10倍，避免云环境内存不足
-#         whisper_model = whisper.load_model("base")
-#         print("✅ Whisper模型加载完成！")
+def init_whisper():
+    """初始化Whisper模型，自动配置ffmpeg路径"""
+    global whisper_model
+    if whisper_model is None:
+        sys.path.append(os.getcwd())
+        os.environ["PATH"] += os.pathsep + os.getcwd()
+        
+        print("正在加载Whisper语音模型（base版，体积小、部署快）...")
+        whisper_model = whisper.load_model("base")
+        print("✅ Whisper模型加载完成！")
 
 def parse_resume(file_path):
     """解析PDF和DOCX格式简历"""
@@ -46,43 +41,36 @@ def parse_resume(file_path):
     except Exception as e:
         raise Exception(f"简历解析失败：{str(e)}")
 
-# 已注释：语音转文字函数
-# def audio_to_text(file_path):
-#     """语音转文字（简体中文强制输出版）"""
-#     init_whisper()
-#     
-#     # 创建临时目录，使用纯英文文件名，解决中文文件名问题
-#     temp_dir = tempfile.mkdtemp()
-#     temp_file = os.path.join(temp_dir, "temp_audio.mp3")
-#     
-#     try:
-#         shutil.copy2(file_path, temp_file)
-#         
-#         # 转写音频，关闭半精度计算，解决Windows兼容性问题
-#         result = whisper_model.transcribe(
-#             temp_file,
-#             language="zh",
-#             fp16=False,
-#             verbose=False,
-#             beam_size=5,
-#             best_of=5,
-#             temperature=0.0,
-#             initial_prompt="以下是一段简体中文的技术面试录音，内容涉及前端开发、后端开发、数据库等技术话题。"
-#         )
-#         
-#         # ✅ 修复：移除OpenCC依赖（不在requirements.txt中，会导致部署失败）
-#         # Whisper指定language="zh"已默认输出简体中文，无需额外转换
-#         return result["text"].strip()
-#     
-#     except Exception as e:
-#         raise Exception(f"语音转写失败：{str(e)}\n💡 云环境暂不支持语音功能，可在本地体验")
-#     
-#     finally:
-#         # 确保临时文件一定被清理
-#         try:
-#             shutil.rmtree(temp_dir, ignore_errors=True)
-#         except:
-#             pass
+def audio_to_text(file_path):
+    """语音转文字（简体中文强制输出版）"""
+    init_whisper()
+    
+    temp_dir = tempfile.mkdtemp()
+    temp_file = os.path.join(temp_dir, "temp_audio.mp3")
+    
+    try:
+        shutil.copy2(file_path, temp_file)
+        
+        result = whisper_model.transcribe(
+            temp_file,
+            language="zh",
+            fp16=False,
+            verbose=False,
+            beam_size=5,
+            best_of=5,
+            temperature=0.0,
+            initial_prompt="以下是一段简体中文的技术面试录音。"
+        )
+        return result["text"].strip()
+    
+    except Exception as e:
+        raise Exception(f"语音转写失败：{str(e)}\n云环境支持短音频测试")
+    
+    finally:
+        try:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        except:
+            pass
 
 def check_forbidden(text):
     """检测简历中的违禁词"""
@@ -92,7 +80,6 @@ def check_forbidden(text):
 def calc_similarity(text1, text2):
     """计算两段文本的余弦相似度"""
     try:
-        # ✅ 修复：适配scikit-learn 1.4+版本，添加token_pattern=None
         vectorizer = TfidfVectorizer(
             tokenizer=jieba.lcut,
             token_pattern=None,
@@ -107,7 +94,6 @@ def calc_similarity(text1, text2):
 # 全局配置
 KNOWLEDGE_DIR = "knowledge"
 
-# 自动创建项目必需目录
 os.makedirs("uploads/resumes", exist_ok=True)
 os.makedirs("uploads/audio", exist_ok=True)
 os.makedirs(KNOWLEDGE_DIR, exist_ok=True)
@@ -133,7 +119,6 @@ def load_interview_knowledge():
                 with open(file_path, "r", encoding="utf-8") as f:
                     knowledge += f.read() + "\n\n"
                     
-        # 无知识库时自动创建默认内容
         if not knowledge.strip():
             default_knowledge = """
 # 面试核心知识库
@@ -163,7 +148,6 @@ def load_interview_knowledge():
 def save_knowledge(filename, content):
     """保存RAG知识库"""
     try:
-        # 清理文件名非法字符
         safe_name = clean_filename(filename)
         path = os.path.join(KNOWLEDGE_DIR, safe_name)
         with open(path, "w", encoding="utf-8") as f:
