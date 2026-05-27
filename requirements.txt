@@ -1,13 +1,5 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-langchain
-langchain-openai
-pandas
-numpy
-python-dotenv
-PyPDF2
-python-docx
-jieba
-scikit-learn
-torch==2.0.1+cpu
-torchaudio==2.0.2+cpu
-openai-whisper==20230314
+# 智能面试助手 - 核心依赖（Streamlit Cloud 2026.5 验证通过）
+streamlit>=1.57.0
+zhipuai>=2.2.0
+python-dotenv>=1.0.0
+requests>=2.31.0
