@@ -1,38 +1,55 @@
-from faster_whisper import WhisperModel
+import whisper
 import os
+import torch
 from typing import Optional
 
-# 全局变量，避免重复加载模型（与原逻辑完全一致）
+# 全局变量，避免重复加载模型（优化性能）
 WHISPER_MODEL = None
 SUPPORTED_AUDIO_FORMATS = {"mp3", "wav", "m4a", "flac", "ogg"}
 
 def init_whisper(model_name: str = "base", device: Optional[str] = None) -> None:
-    """与原接口完全一致，仅替换底层实现"""
+    """
+    初始化 Whisper 模型（适配 openai-whisper==20230314）
+    首次调用时加载，后续复用全局模型实例
+    """
     global WHISPER_MODEL
+    
+    # 检查是否已加载模型
     if WHISPER_MODEL is not None:
         return
     
-    if device is None:
-        device = "cpu"
-    
-    # 自定义模型缓存路径，避免权限问题
-    model_cache_dir = os.path.join(os.getenv("TMPDIR", os.getcwd()), "whisper_models")
-    os.makedirs(model_cache_dir, exist_ok=True)
-    
-    # faster-whisper 模型加载（与原接口参数兼容）
-    WHISPER_MODEL = WhisperModel(
-        model_name,
-        device=device,
-        compute_type="int8",  # CPU 环境最优量化方式
-        download_root=model_cache_dir
-    )
-    print(f"✅ Faster-Whisper 模型 '{model_name}' 已成功加载到 {device}")
+    try:
+        # 自动选择设备（CPU，适配 Streamlit Cloud）
+        if device is None:
+            device = "cpu"
+        
+        # 关键适配：20230314 版本使用 load_model API
+        WHISPER_MODEL = whisper.load_model(
+            name=model_name,
+            device=device,
+            download_root=os.path.join(os.getcwd(), "models", "whisper")  # 自定义模型缓存路径
+        )
+        print(f"✅ Whisper 模型 '{model_name}' 已成功加载到 {device}")
+        
+    except Exception as e:
+        error_msg = f"❌ Whisper 模型初始化失败: {str(e)}"
+        print(error_msg)
+        # 抛出异常供上层处理
+        raise RuntimeError(error_msg) from e
 
 def audio_to_text(audio_path: str, language: str = "zh", task: str = "transcribe") -> str:
-    """与原接口完全一致，不改变任何调用方式"""
+    """
+    音频转文字（适配 openai-whisper==20230314）
+    Args:
+        audio_path: 音频文件路径
+        language: 语言代码（zh=中文，en=英文）
+        task: 任务类型（transcribe=转录，translate=翻译）
+    Returns:
+        转录文本
+    """
     global WHISPER_MODEL
     
-    # 前置检查（与原逻辑完全一致）
+    # 前置检查
     if not os.path.exists(audio_path):
         raise FileNotFoundError(f"音频文件不存在: {audio_path}")
     
@@ -40,20 +57,29 @@ def audio_to_text(audio_path: str, language: str = "zh", task: str = "transcribe
     if file_ext not in SUPPORTED_AUDIO_FORMATS:
         raise ValueError(f"不支持的音频格式: {file_ext}，支持格式: {SUPPORTED_AUDIO_FORMATS}")
     
-    # 确保模型已初始化（与原逻辑完全一致）
+    # 确保模型已初始化
     if WHISPER_MODEL is None:
         init_whisper()
     
     try:
-        # faster-whisper 转录（参数与原逻辑兼容，返回格式一致）
-        segments, info = WHISPER_MODEL.transcribe(
-            audio_path,
+        # 关键适配：20230314 版本的 transcribe 参数
+        result = WHISPER_MODEL.transcribe(
+            audio=audio_path,
             language=language,
-            vad_filter=True  # 过滤静音，提升识别准确率
+            task=task,
+            verbose=False,  # 禁用详细输出，避免 Streamlit 日志刷屏
+            word_timestamps=False,  # 禁用词级时间戳，提升速度
+            fp16=False  # CPU 环境必须禁用 fp16
         )
         
-        # 拼接文本，与原函数返回格式完全一致
-        full_text = " ".join([segment.text.strip() for segment in segments])
+        # 提取纯文本结果
+        full_text = result.get("text", "").strip()
+        
+        # 拼接段落（如果有）
+        if "segments" in result:
+            segment_texts = [seg.get("text", "").strip() for seg in result["segments"]]
+            full_text = " ".join(segment_texts)
+        
         return full_text if full_text else "⚠️ 未检测到有效语音内容"
         
     except Exception as e:
@@ -62,11 +88,16 @@ def audio_to_text(audio_path: str, language: str = "zh", task: str = "transcribe
         raise RuntimeError(error_msg) from e
 
 def is_whisper_available() -> bool:
-    """检查 Whisper 是否可用（与原逻辑完全一致）"""
+    """检查 Whisper 是否可用"""
     try:
-        from faster_whisper import WhisperModel
+        import whisper
         return True
     except ImportError:
         return False
 
-# 移除启动时预加载，改为用户首次调用时加载，避免启动超时
+# 可选：预加载模型（应用启动时执行）
+if is_whisper_available():
+    try:
+        init_whisper()
+    except Exception as e:
+        print(f"⚠️ 预加载 Whisper 模型失败（非致命错误）: {str(e)}")
