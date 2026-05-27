@@ -632,57 +632,58 @@ elif menu == "📄 简历评估":
         st.warning(f"获取评估记录失败：{str(e)}")
     st.markdown('<div class="guide-tip">📌 上传简历文件后点击评估，即可获取专业打分与优化意见</div>',unsafe_allow_html=True)
 
-elif menu == "🎙️ 面试录音分析":
-    st.subheader("🎙️ 面试录音分析")
-    with st.container():
-        st.markdown('<div class="card">',unsafe_allow_html=True)
-        file=st.file_uploader("上传录音（MP3/WAV）",type=["mp3","wav"], key="audio_upload")
-        if file and st.button("🎙️ 开始分析"):
-            try:
-                safe_name = safe_filename(file.name)
-                path=os.path.join("uploads","audio",safe_name)
-                with open(path,"wb") as f:f.write(file.getbuffer())
-                with st.status("语音解析分析中...") as status:
-                    utils.init_whisper()
-                    text=utils.audio_to_text(path)
-                    res=agents.audio_agent.run(path, safe_name)
-                    status.update(label="✅ 分析完成",state="complete")
-                c1,c2=st.columns([1,2])
-                with c1:
-                    st.metric("面试评分",f"{res.get('score', '0')}分")
-                    st.download_button("下载转写文本", res.get("transcript", ""), f"{safe_name}_文本.txt")
-                with c2:
-                    st.markdown("录音转写内容")
-                    st.text_area("", res.get("transcript", ""), height=120, key="audio_result_textarea")
-                    st.markdown("分析报告")
-                    st.markdown(res.get("report", "暂无报告"))
-            except Exception as e:
-                st.error(f"分析失败：{str(e)}")
-        st.markdown('</div>',unsafe_allow_html=True)
-    st.markdown("---")
-    h1,h2,h3=st.columns([6,2,2])
-    with h1:st.subheader("📜 最近分析记录")
-    with h2:clear_history("interviews","录音分析")
-    with h3:
-        download_history_report(
-            table_name="interviews",display_name="录音分析",
-            columns_map={"filename":"文件名","score":"评分","transcript":"转写文本","report":"分析报告","created_at":"创建时间"},
-            file_prefix="录音分析"
-        )
-    try:
-        conn=database.get_conn()
-        rec=conn.execute("SELECT id,filename,score,transcript,report FROM interviews ORDER BY id DESC LIMIT 5").fetchall()
-        conn.close()
-        if rec:
-            for r in rec:
-                with st.expander(f"{r['filename']} - {r['score']}分"):
-                    st.text_area("转写", r["transcript"], height=80, key=f"history_audio_text_{r['id']}")
-                    st.markdown(r["report"])
-        else:
-            st.info("暂无历史记录")
-    except Exception as e:
-        st.warning(f"获取录音分析记录失败：{str(e)}")
-    st.markdown('<div class="guide-tip">🎧 上传面试录音，自动转写文字并点评答题表现</div>',unsafe_allow_html=True)
+# 已注释：面试录音分析功能（依赖whisper，云环境部署报错）
+# elif menu == "🎙️ 面试录音分析":
+#     st.subheader("🎙️ 面试录音分析")
+#     with st.container():
+#         st.markdown('<div class="card">',unsafe_allow_html=True)
+#         file=st.file_uploader("上传录音（MP3/WAV）",type=["mp3","wav"], key="audio_upload")
+#         if file and st.button("🎙️ 开始分析"):
+#             try:
+#                 safe_name = safe_filename(file.name)
+#                 path=os.path.join("uploads","audio",safe_name)
+#                 with open(path,"wb") as f:f.write(file.getbuffer())
+#                 with st.status("语音解析分析中...") as status:
+#                     utils.init_whisper()
+#                     text=utils.audio_to_text(path)
+#                     res=agents.audio_agent.run(path, safe_name)
+#                     status.update(label="✅ 分析完成",state="complete")
+#                 c1,c2=st.columns([1,2])
+#                 with c1:
+#                     st.metric("面试评分",f"{res.get('score', '0')}分")
+#                     st.download_button("下载转写文本", res.get("transcript", ""), f"{safe_name}_文本.txt")
+#                 with c2:
+#                     st.markdown("录音转写内容")
+#                     st.text_area("", res.get("transcript", ""), height=120, key="audio_result_textarea")
+#                     st.markdown("分析报告")
+#                     st.markdown(res.get("report", "暂无报告"))
+#             except Exception as e:
+#                 st.error(f"分析失败：{str(e)}")
+#         st.markdown('</div>',unsafe_allow_html=True)
+#     st.markdown("---")
+#     h1,h2,h3=st.columns([6,2,2])
+#     with h1:st.subheader("📜 最近分析记录")
+#     with h2:clear_history("interviews","录音分析")
+#     with h3:
+#         download_history_report(
+#             table_name="interviews",display_name="录音分析",
+#             columns_map={"filename":"文件名","score":"评分","transcript":"转写文本","report":"分析报告","created_at":"创建时间"},
+#             file_prefix="录音分析"
+#         )
+#     try:
+#         conn=database.get_conn()
+#         rec=conn.execute("SELECT id,filename,score,transcript,report FROM interviews ORDER BY id DESC LIMIT 5").fetchall()
+#         conn.close()
+#         if rec:
+#             for r in rec:
+#                 with st.expander(f"{r['filename']} - {r['score']}分"):
+#                     st.text_area("转写", r["transcript"], height=80, key=f"history_audio_text_{r['id']}")
+#                     st.markdown(r["report"])
+#         else:
+#             st.info("暂无历史记录")
+#     except Exception as e:
+#         st.warning(f"获取录音分析记录失败：{str(e)}")
+#     st.markdown('<div class="guide-tip">🎧 上传面试录音，自动转写文字并点评答题表现</div>',unsafe_allow_html=True)
 
 elif menu == "❓ 个性化面试题":
     st.subheader("❓ 个性化面试题生成")
