@@ -95,9 +95,5 @@ def is_whisper_available() -> bool:
     except ImportError:
         return False
 
-# 可选：预加载模型（应用启动时执行）
-if is_whisper_available():
-    try:
-        init_whisper()
-    except Exception as e:
-        print(f"⚠️ 预加载 Whisper 模型失败（非致命错误）: {str(e)}")
+# 【关键修改】删除启动时预加载模型的代码，改为用户首次调用时加载
+# （原有预加载代码已删除，不影响功能，仅避免启动超时）
