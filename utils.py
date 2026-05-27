@@ -2,6 +2,7 @@ import whisper
 import os
 import torch
 from typing import Optional
+import streamlit as st  # 【新增】导入Streamlit，用于缓存和加载提示
 
 # 全局变量，避免重复加载模型（优化性能）
 WHISPER_MODEL = None
@@ -23,13 +24,21 @@ def init_whisper(model_name: str = "base", device: Optional[str] = None) -> None
         if device is None:
             device = "cpu"
         
-        # 关键适配：20230314 版本使用 load_model API
-        WHISPER_MODEL = whisper.load_model(
-            name=model_name,
-            device=device,
-            download_root=os.path.join(os.getcwd(), "models", "whisper")  # 自定义模型缓存路径
-        )
-        print(f"✅ Whisper 模型 '{model_name}' 已成功加载到 {device}")
+        # 【新增】使用 Streamlit 缓存资源，避免重复加载（关键优化）
+        @st.cache_resource(show_spinner=False)
+        def _load_whisper_model(_model_name: str, _device: str):
+            """内部缓存函数，仅加载一次模型"""
+            return whisper.load_model(
+                name=_model_name,
+                device=_device,
+                # 【优化】使用系统临时目录，适配 Streamlit Cloud 存储限制
+                download_root=os.path.join(os.getenv("TMPDIR", os.getcwd()), "whisper_models")
+            )
+        
+        # 【新增】显示加载提示，提升用户体验
+        with st.spinner("正在加载语音识别模型（首次使用需1-2分钟）..."):
+            WHISPER_MODEL = _load_whisper_model(model_name, device)
+            print(f"✅ Whisper 模型 '{model_name}' 已成功加载到 {device}")
         
     except Exception as e:
         error_msg = f"❌ Whisper 模型初始化失败: {str(e)}"
@@ -62,15 +71,17 @@ def audio_to_text(audio_path: str, language: str = "zh", task: str = "transcribe
         init_whisper()
     
     try:
-        # 关键适配：20230314 版本的 transcribe 参数
-        result = WHISPER_MODEL.transcribe(
-            audio=audio_path,
-            language=language,
-            task=task,
-            verbose=False,  # 禁用详细输出，避免 Streamlit 日志刷屏
-            word_timestamps=False,  # 禁用词级时间戳，提升速度
-            fp16=False  # CPU 环境必须禁用 fp16
-        )
+        # 【新增】显示转写提示，避免用户误以为页面无响应
+        with st.spinner("正在解析音频内容..."):
+            # 关键适配：20230314 版本的 transcribe 参数
+            result = WHISPER_MODEL.transcribe(
+                audio=audio_path,
+                language=language,
+                task=task,
+                verbose=False,  # 禁用详细输出，避免 Streamlit 日志刷屏
+                word_timestamps=False,  # 禁用词级时间戳，提升速度
+                fp16=False  # CPU 环境必须禁用 fp16
+            )
         
         # 提取纯文本结果
         full_text = result.get("text", "").strip()
