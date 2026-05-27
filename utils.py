@@ -1,140 +1,103 @@
-import os
-import sys
-import tempfile
-import shutil
-from PyPDF2 import PdfReader
-from docx import Document
 import whisper
-import jieba
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import re
-import streamlit as st
-import time
+import os
+import torch
+from typing import Optional
 
-whisper_model = None
+# 全局变量，避免重复加载模型（优化性能）
+WHISPER_MODEL = None
+SUPPORTED_AUDIO_FORMATS = {"mp3", "wav", "m4a", "flac", "ogg"}
 
-def init_whisper():
-    global whisper_model
-    if whisper_model is None:
-        sys.path.append(os.getcwd())
-        os.environ["PATH"] += os.pathsep + os.getcwd()
-        whisper_model = whisper.load_model("base")
-
-def parse_resume(file_path):
-    ext = os.path.splitext(file_path)[-1].lower()
-    text = ""
+def init_whisper(model_name: str = "base", device: Optional[str] = None) -> None:
+    """
+    初始化 Whisper 模型（适配 openai-whisper==20230314）
+    首次调用时加载，后续复用全局模型实例
+    """
+    global WHISPER_MODEL
+    
+    # 检查是否已加载模型
+    if WHISPER_MODEL is not None:
+        return
+    
     try:
-        if ext == ".pdf":
-            reader = PdfReader(file_path)
-            text = "\n".join([page.extract_text() for page in reader.pages])
-        elif ext == ".docx":
-            doc = Document(file_path)
-            text = "\n".join([p.text for p in doc.paragraphs])
-        return text.strip()
-    except Exception as e:
-        raise Exception(f"简历解析失败：{str(e)}")
-
-def audio_to_text(file_path):
-    init_whisper()
-    temp_dir = tempfile.mkdtemp()
-    temp_file = os.path.join(temp_dir, "temp_audio.mp3")
-    try:
-        shutil.copy2(file_path, temp_file)
-        result = whisper_model.transcribe(
-            temp_file,
-            language="zh",
-            fp16=False,
-            verbose=False,
-            beam_size=5,
-            best_of=5,
-            temperature=0.0,
-            initial_prompt="以下是一段简体中文的技术面试录音。"
+        # 自动选择设备（CPU，适配 Streamlit Cloud）
+        if device is None:
+            device = "cpu"
+        
+        # 关键适配：20230314 版本使用 load_model API
+        WHISPER_MODEL = whisper.load_model(
+            name=model_name,
+            device=device,
+            download_root=os.path.join(os.getcwd(), "models", "whisper")  # 自定义模型缓存路径
         )
-        return result["text"].strip()
+        print(f"✅ Whisper 模型 '{model_name}' 已成功加载到 {device}")
+        
     except Exception as e:
-        raise Exception(f"语音转写失败：{str(e)}")
-    finally:
-        try:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-        except:
-            pass
+        error_msg = f"❌ Whisper 模型初始化失败: {str(e)}"
+        print(error_msg)
+        # 抛出异常供上层处理
+        raise RuntimeError(error_msg) from e
 
-def check_forbidden(text):
-    forbidden_words = ["造假", "伪造", "虚假", "冒充", "谎报", "虚构", "作弊", "抄袭"]
-    return [word for word in forbidden_words if word in text]
-
-def calc_similarity(text1, text2):
+def audio_to_text(audio_path: str, language: str = "zh", task: str = "transcribe") -> str:
+    """
+    音频转文字（适配 openai-whisper==20230314）
+    Args:
+        audio_path: 音频文件路径
+        language: 语言代码（zh=中文，en=英文）
+        task: 任务类型（transcribe=转录，translate=翻译）
+    Returns:
+        转录文本
+    """
+    global WHISPER_MODEL
+    
+    # 前置检查
+    if not os.path.exists(audio_path):
+        raise FileNotFoundError(f"音频文件不存在: {audio_path}")
+    
+    file_ext = audio_path.split(".")[-1].lower()
+    if file_ext not in SUPPORTED_AUDIO_FORMATS:
+        raise ValueError(f"不支持的音频格式: {file_ext}，支持格式: {SUPPORTED_AUDIO_FORMATS}")
+    
+    # 确保模型已初始化
+    if WHISPER_MODEL is None:
+        init_whisper()
+    
     try:
-        vectorizer = TfidfVectorizer(
-            tokenizer=jieba.lcut,
-            token_pattern=None,
-            stop_words=["的", "了", "是", "在", "我", "和", "与", "及", "或"]
+        # 关键适配：20230314 版本的 transcribe 参数
+        result = WHISPER_MODEL.transcribe(
+            audio=audio_path,
+            language=language,
+            task=task,
+            verbose=False,  # 禁用详细输出，避免 Streamlit 日志刷屏
+            word_timestamps=False,  # 禁用词级时间戳，提升速度
+            fp16=False  # CPU 环境必须禁用 fp16
         )
-        tfidf_matrix = vectorizer.fit_transform([text1, text2])
-        return cosine_similarity(tfidf_matrix[0], tfidf_matrix[1])[0][0]
+        
+        # 提取纯文本结果
+        full_text = result.get("text", "").strip()
+        
+        # 拼接段落（如果有）
+        if "segments" in result:
+            segment_texts = [seg.get("text", "").strip() for seg in result["segments"]]
+            full_text = " ".join(segment_texts)
+        
+        return full_text if full_text else "⚠️ 未检测到有效语音内容"
+        
     except Exception as e:
-        print(f"相似度计算失败：{str(e)}")
-        return 0.0
+        error_msg = f"❌ 音频转文字失败: {str(e)}"
+        print(error_msg)
+        raise RuntimeError(error_msg) from e
 
-KNOWLEDGE_DIR = "knowledge"
-os.makedirs("uploads/resumes", exist_ok=True)
-os.makedirs("uploads/audio", exist_ok=True)
-os.makedirs(KNOWLEDGE_DIR, exist_ok=True)
-
-def stream_output(text, placeholder, delay=0.01):
-    full_text = ""
-    for i in range(0, len(text), 3):
-        chunk = text[i:i+3]
-        full_text += chunk
-        placeholder.markdown(full_text + "▌")
-        time.sleep(delay)
-    placeholder.markdown(full_text)
-    return full_text
-
-def load_interview_knowledge():
-    knowledge = ""
+def is_whisper_available() -> bool:
+    """检查 Whisper 是否可用"""
     try:
-        for file in os.listdir(KNOWLEDGE_DIR):
-            if file.endswith(".txt"):
-                file_path = os.path.join(KNOWLEDGE_DIR, file)
-                with open(file_path, "r", encoding="utf-8") as f:
-                    knowledge += f.read() + "\n\n"
-        if not knowledge.strip():
-            default_knowledge = """
-# 面试核心知识库
-## 简历优化规则
-1. 量化工作成果，用数据体现价值
-2. 匹配岗位JD，突出核心技能
-3. 杜绝虚假信息，专业简洁
-
-## 面试回答技巧
-1. 自我介绍：1分钟内，突出优势
-2. 项目介绍：STAR法则（情境-任务-行动-结果）
-3. 离职原因：积极正面，不诋毁前公司
-
-## 技术面试要点
-1. 基础扎实，原理清晰
-2. 结合项目，实战落地
-3. 主动思考，逻辑严谨
-"""
-            save_knowledge("面试基础库.txt", default_knowledge)
-            knowledge = default_knowledge
-    except Exception as e:
-        st.error(f"知识库加载失败：{str(e)}")
-        return ""
-    return knowledge
-
-def save_knowledge(filename, content):
-    try:
-        safe_name = clean_filename(filename)
-        path = os.path.join(KNOWLEDGE_DIR, safe_name)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
+        import whisper
         return True
-    except Exception as e:
-        print(f"保存知识库失败：{str(e)}")
+    except ImportError:
         return False
 
-def clean_filename(filename):
-    return re.sub(r'[\\/*?:"<>|]', "", filename)
+# 可选：预加载模型（应用启动时执行）
+if is_whisper_available():
+    try:
+        init_whisper()
+    except Exception as e:
+        print(f"⚠️ 预加载 Whisper 模型失败（非致命错误）: {str(e)}")
