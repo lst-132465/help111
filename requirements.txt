@@ -1,5 +1,4 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
-streamlit==1.36.0
 langchain
 langchain-openai
 pandas
