@@ -1,8 +1,18 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
+
+# 强制锁定Streamlit预装版本，彻底禁止卸载
+rich==15.0.0
+pygments==2.20.0
+mdurl==0.1.2
+markdown-it-py==4.2.0
+
+# 核心框架
 streamlit==1.37.0
 langchain==0.2.12
 langchain-core==0.2.27
 langchain-openai==0.1.17
+
+# 数据处理
 pandas
 numpy
 python-dotenv
@@ -10,6 +20,8 @@ PyPDF2
 python-docx
 jieba
 scikit-learn
+
+# 语音转写（已注释代码，不影响运行）
 torch==2.3.0+cpu
 torchaudio==2.3.0+cpu
 openai-whisper==20230314
