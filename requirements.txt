@@ -9,6 +9,6 @@ PyPDF2
 python-docx
 jieba
 scikit-learn
-torch==2.0.1+cpu
-torchaudio==2.0.2+cpu
+torch==2.3.0+cpu
+torchaudio==2.3.0+cpu
 openai-whisper==20230314
