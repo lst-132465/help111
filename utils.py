@@ -3,6 +3,7 @@ import os
 import torch
 from typing import Optional
 import streamlit as st  # 【新增】导入Streamlit，用于缓存和加载提示
+import time  # 【新增】导入time，用于分阶段加载避免主线程阻塞
 
 # 全局变量，避免重复加载模型（优化性能）
 WHISPER_MODEL = None
@@ -28,12 +29,16 @@ def init_whisper(model_name: str = "base", device: Optional[str] = None) -> None
         @st.cache_resource(show_spinner=False)
         def _load_whisper_model(_model_name: str, _device: str):
             """内部缓存函数，仅加载一次模型"""
-            return whisper.load_model(
+            # 【关键修复】分阶段加载，打破长时间阻塞，让Streamlit同步前端状态
+            time.sleep(0.1)  # 给前端100ms同步时间
+            model = whisper.load_model(
                 name=_model_name,
                 device=_device,
                 # 【优化】使用系统临时目录，适配 Streamlit Cloud 存储限制
                 download_root=os.path.join(os.getenv("TMPDIR", os.getcwd()), "whisper_models")
             )
+            time.sleep(0.1)  # 再次同步前端状态，避免DOM操作冲突
+            return model
         
         # 【新增】显示加载提示，提升用户体验
         with st.spinner("正在加载语音识别模型（首次使用需1-2分钟）..."):
