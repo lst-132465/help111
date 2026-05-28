@@ -1,9 +1,13 @@
-# 强制忽略已安装依赖，清理缓存
---force-reinstall
---no-cache-dir
-
-# 核心依赖
-streamlit>=1.57.0
-zhipuai>=2.2.0
-python-dotenv>=1.0.0
-requests>=2.31.0
+--extra-index-url https://download.pytorch.org/whl/cpu
+langchain==0.2.11
+langchain-openai==0.1.17
+pandas
+numpy
+python-dotenv
+PyPDF2
+python-docx
+jieba
+scikit-learn
+torch==2.0.1+cpu
+torchaudio==2.0.2+cpu
+openai-whisper==20230314
