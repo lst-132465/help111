@@ -37,7 +37,7 @@ MODEL_CONFIGS = {
 
 # 全局兼容变量（解决app.py调用init_llm的问题）
 current_llm = None
-current_model_name = None  # 【修复1】新增：保存当前全局模型的名称，解决模型选择错误
+current_model_name = None  # 新增：保存当前全局模型的名称，解决模型选择错误
 
 # 新增：兼容app.py的init_llm函数
 def init_llm(model_name):
@@ -53,11 +53,11 @@ def init_llm(model_name):
         max_retries=2,
         streaming=True
     )
-    current_model_name = model_name  # 【修复1】保存当前初始化的模型名称
+    current_model_name = model_name  # 保存当前初始化的模型名称
 
 def get_llm(model_name="智谱清言4-Flash（最快，推荐）", streaming=True):
     """线程安全的LLM获取函数，优先使用全局初始化的实例"""
-    # 【修复1】新增模型名称检查，避免返回错误的模型实例
+    # 新增模型名称检查，避免返回错误的模型实例
     if current_llm is not None and streaming and model_name == current_model_name:
         return current_llm
     config = MODEL_CONFIGS[model_name]
@@ -257,42 +257,42 @@ class ResumeAgent:
         return {"score": score, "similarity": similarity, "forbidden": forbidden, "report": report}
 
 # ===================== 面试录音分析Agent =====================
-class AudioAgent:
-    def run(self, file_path, filename):
-        try:
-            text = utils.audio_to_text(file_path)
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", "分析面试回答：1. 总分(0-100) 2. 准确性 3. 逻辑 4. 改进方向。"),
-                ("human", "面试内容：{text}")
-            ])
-            report = get_llm().invoke(prompt.invoke({"text": text})).content
+# class AudioAgent:
+#     def run(self, file_path, filename):
+#         try:
+#             text = utils.audio_to_text(file_path)
+#             prompt = ChatPromptTemplate.from_messages([
+#                 ("system", "分析面试回答：1. 总分(0-100) 2. 准确性 3. 逻辑 4. 改进方向。"),
+#                 ("human", "面试内容：{text}")
+#             ])
+#             report = get_llm().invoke(prompt.invoke({"text": text})).content
             
-            score_match = re.search(r'(总分|得分)[:：\s-]*(\d{1,3})', report, re.IGNORECASE)
-            if score_match:
-                score = max(60, min(95, int(score_match.group(2)) + random.randint(-2,2)))
-            else:
-                score = 70 + random.randint(-5,5)
+#             score_match = re.search(r'(总分|得分)[:：\s-]*(\d{1,3})', report, re.IGNORECASE)
+#             if score_match:
+#                 score = max(60, min(95, int(score_match.group(2)) + random.randint(-2,2)))
+#             else:
+#                 score = 70 + random.randint(-5,5)
             
-            db_execute('''INSERT INTO interviews (filename,transcript,score,report)
-                        VALUES (?,?,?,?)''', (filename, text, score, report))
-            return {"transcript": text, "score": score, "report": report}
-        except Exception as e:
-            return {"error": str(e)}
+#             db_execute('''INSERT INTO interviews (filename,transcript,score,report)
+#                         VALUES (?,?,?,?)''', (filename, text, score, report))
+#             return {"transcript": text, "score": score, "report": report}
+#         except Exception as e:
+#             return {"error": str(e)}
     
-    def run_with_knowledge(self, file_path, filename):
-        text = utils.audio_to_text(file_path)
-        knowledge = "\n".join([doc.page_content for doc in get_rag_retriever().get_relevant_documents("面试回答")])
+#     def run_with_knowledge(self, file_path, filename):
+#         text = utils.audio_to_text(file_path)
+#         knowledge = "\n".join([doc.page_content for doc in get_rag_retriever().get_relevant_documents("面试回答")])
         
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "结合知识库分析面试回答：1.总分 2.准确性 3.逻辑 4.改进方向。知识库：{knowledge}"),
-            ("human", "面试内容：{text}")
-        ])
-        report = get_llm().invoke(prompt.invoke({"text": text, "knowledge": knowledge})).content
-        score = max(65, min(90, 70 + random.randint(-5,5)))
+#         prompt = ChatPromptTemplate.from_messages([
+#             ("system", "结合知识库分析面试回答：1.总分 2.准确性 3.逻辑 4.改进方向。知识库：{knowledge}"),
+#             ("human", "面试内容：{text}")
+#         ])
+#         report = get_llm().invoke(prompt.invoke({"text": text, "knowledge": knowledge})).content
+#         score = max(65, min(90, 70 + random.randint(-5,5)))
         
-        db_execute('''INSERT INTO interviews (filename,transcript,score,report)
-                    VALUES (?,?,?,?)''', (filename, text, score, report))
-        return {"transcript": text, "score": score, "report": report}
+#         db_execute('''INSERT INTO interviews (filename,transcript,score,report)
+#                     VALUES (?,?,?,?)''', (filename, text, score, report))
+#         return {"transcript": text, "score": score, "report": report}
 
 # ===================== 面试题生成Agent =====================
 class QuestionAgent:
@@ -497,7 +497,7 @@ class UnifiedInterviewAssistant:
 
 # ===================== 初始化Agent =====================
 resume_agent = ResumeAgent()
-audio_agent = AudioAgent()
+# audio_agent = AudioAgent()  # 【注释】暂时禁用
 question_agent = QuestionAgent()
 cover_agent = CoverLetterAgent()
 salary_agent = SalaryAgent()
@@ -511,6 +511,6 @@ scheduler_agent = SchedulerAgent()
 
 # 兼容导出init_llm，让app.py正常调用
 __all__ = ["MODEL_CONFIGS", "init_llm", "get_llm", "stream_output", "stream_llm_response",
-           "resume_agent", "audio_agent", "question_agent", "cover_agent", "salary_agent",
+           "resume_agent", "question_agent", "cover_agent", "salary_agent",
            "career_agent", "interview_agent", "ats_agent", "multi_style_agent",
            "review_agent", "unified_assistant", "scheduler_agent"]
