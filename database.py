@@ -1,12 +1,12 @@
 import sqlite3
 import os
 
-DB_FILE = "interview.db"
+DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "interview.db")  # 【修复1】使用绝对路径，避免Streamlit环境下路径错误
 
 def get_conn():
     """获取数据库连接
     说明：check_same_thread=False 是Streamlit多线程环境下的标准配置
-    所有数据库操作都通过db_execute/db_query封装，保证线程安全
+    所有数据库操作都通过本模块函数封装，保证线程安全
     """
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     conn.row_factory = sqlite3.Row  # 支持字典格式读取数据
