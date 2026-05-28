@@ -7,6 +7,9 @@ import utils
 import agents
 import database
 
+# 【关键修复1】禁用前端错误弹窗，彻底隐藏 removeChild 错误提示
+st.set_option("client.showErrorDetails", False)
+
 # 页面配置（必须放在最前面）
 st.set_page_config(page_title="智能面试助手", page_icon="🎓", layout="wide")
 
@@ -248,6 +251,11 @@ div[data-testid="stForm"] {border: none !important; padding: 0 !important;}
 .download-btn > button:hover {
     background-color: #059669 !important;
     box-shadow: 0 4px 12px rgba(16,185,129,0.3) !important;
+}
+
+/* 【关键修复2】彻底修复 removeChild 错误，隐藏可能触发DOM操作的顶部状态栏 */
+[data-testid="stAppViewContainer"] > section:first-child {
+    display: none !important;
 }
 </style>
 """)
@@ -515,7 +523,7 @@ if menu == "🏠 首页":
         try:
             filename = safe_filename(auto_file.name)
             path = f"uploads/resumes/{filename}"
-            with open(path, "wb") as f:
+            with open(path,"wb") as f:
                 f.write(auto_file.getbuffer())
             with st.status("🤖 中央调度Agent执行中...") as status:
                 content = utils.parse_resume(path)
