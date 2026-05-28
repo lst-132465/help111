@@ -37,11 +37,12 @@ MODEL_CONFIGS = {
 
 # 全局兼容变量（解决app.py调用init_llm的问题）
 current_llm = None
+current_model_name = None  # 【修复1】新增：保存当前全局模型的名称，解决模型选择错误
 
 # 新增：兼容app.py的init_llm函数
 def init_llm(model_name):
     """兼容app.py的初始化函数，保留全局变量"""
-    global current_llm
+    global current_llm, current_model_name
     config = MODEL_CONFIGS[model_name]
     current_llm = ChatOpenAI(
         model=config["model_name"],
@@ -52,10 +53,12 @@ def init_llm(model_name):
         max_retries=2,
         streaming=True
     )
+    current_model_name = model_name  # 【修复1】保存当前初始化的模型名称
 
 def get_llm(model_name="智谱清言4-Flash（最快，推荐）", streaming=True):
     """线程安全的LLM获取函数，优先使用全局初始化的实例"""
-    if current_llm is not None and streaming:
+    # 【修复1】新增模型名称检查，避免返回错误的模型实例
+    if current_llm is not None and streaming and model_name == current_model_name:
         return current_llm
     config = MODEL_CONFIGS[model_name]
     return ChatOpenAI(
